@@ -35,9 +35,10 @@ class Net(nn.Module):
         return output
 
 
-def train(model, train_loader, optimizer, epoch):
+def train(model, train_loader, optimizer, epoch, device):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
         loss = F.nll_loss(output, target)
@@ -62,21 +63,24 @@ def main():
     parser.add_argument("--lr", type=float, default=1.0)
     parser.add_argument("--out", type=str, required=True)
     args = parser.parse_args()
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
     )
     dataset1 = datasets.MNIST("./data", train=True, download=True, transform=transform)
-    train_loader = torch.utils.data.DataLoader(dataset1, batch_size=args.batch_size)
-    model = Net()
+    train_loader = torch.utils.data.DataLoader(
+        dataset1, batch_size=args.batch_size, shuffle=True
+    )
+    model = Net().to(device)
     optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
     scheduler = StepLR(optimizer, step_size=1, gamma=0.7)
     for epoch in range(1, args.epochs + 1):
-        train(model, train_loader, optimizer, epoch)
+        train(model, train_loader, optimizer, epoch, device)
         scheduler.step()
 
     os.makedirs(os.path.split(os.path.abspath(args.out))[0], exist_ok=True)
-    torch.save(model, args.out, pickle_module=cloudpickle)
+    torch.save(model.to(torch.device("cpu")), args.out, pickle_module=cloudpickle)
 
 
 if __name__ == "__main__":
